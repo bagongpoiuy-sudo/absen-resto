@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, Attendance, WorkSettings } from '../lib/supabase';
+import { Attendance, WorkSettings, getAttendances, getWorkSettings } from '../lib/api';
 import {
   LogOut, QrCode, CheckCircle2, Clock, AlertCircle, Calendar,
   User, Building2, Briefcase, Hash, TrendingUp, ChevronDown,
@@ -29,16 +29,16 @@ export default function UserDashboard() {
     if (!profile) return;
 
     const [attRes, wsRes] = await Promise.all([
-      supabase.from('attendance').select('*').eq('user_id', profile.id).order('date', { ascending: false }).limit(30),
-      supabase.from('work_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+      getAttendances(profile.id),
+      getWorkSettings(),
     ]);
 
-    if (attRes.data) {
-      setAttendances(attRes.data);
-      const tod = attRes.data.find(a => a.date === today) ?? null;
+    if (attRes) {
+      setAttendances(attRes);
+      const tod = attRes.find(a => a.date === today) ?? null;
       setTodayAttendance(tod);
     }
-    if (wsRes.data) setWorkSettings(wsRes.data);
+    if (wsRes) setWorkSettings(wsRes);
   }, [profile, today]);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function UserDashboard() {
       margin: 2,
       color: { dark: '#0f172a', light: '#ffffff' },
       errorCorrectionLevel: 'H',
-    }).then(url => setQrDataUrl(url));
+    }).then((url: string) => setQrDataUrl(url));
   }, [profile]);
 
   useEffect(() => {
@@ -62,17 +62,8 @@ export default function UserDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!profile) return;
-    const channel = supabase
-      .channel('attendance-user-' + profile.id)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'attendance',
-        filter: `user_id=eq.${profile.id}`,
-      }, () => loadData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // No real-time channel needed for direct database integration.
+    return undefined;
   }, [profile, loadData]);
 
   const stats = {

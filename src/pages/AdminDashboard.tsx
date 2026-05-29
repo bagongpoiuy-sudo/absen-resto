@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, Attendance, Profile, WorkSettings } from '../lib/supabase';
+import { Attendance, Profile, WorkSettings, getProfiles, getAttendancesByDate, getProfileById, getAttendanceForUser, createAttendance, updateAttendance, saveWorkSettings as saveWorkSettingsApi, getWorkSettings } from '../lib/api';
 import { LogOut, QrCode, CheckCircle2, Clock, AlertCircle, Calendar, Users, Settings, X, Save, Scan, BarChart3, ChevronRight, UserCheck, Hash, Building2, Briefcase, User as UserIcon, CreditCard as Edit3 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -41,28 +41,25 @@ export default function AdminDashboard() {
 
   const loadData = useCallback(async () => {
     const [todayRes, profilesRes, wsRes] = await Promise.all([
-      supabase.from('attendance').select('*, profiles(*)').eq('date', today).order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*').eq('role', 'user').order('full_name'),
-      supabase.from('work_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+      getAttendancesByDate(today),
+      getProfiles('user'),
+      getWorkSettings(),
     ]);
-    if (todayRes.data) setTodayAttendances(todayRes.data as (Attendance & { profiles: Profile })[]);
-    if (profilesRes.data) setAllProfiles(profilesRes.data);
-    if (wsRes.data) {
-      setWorkSettings(wsRes.data);
+
+    if (todayRes) setTodayAttendances(todayRes as (Attendance & { profiles: Profile })[]);
+    if (profilesRes) setAllProfiles(profilesRes);
+    if (wsRes) {
+      setWorkSettings(wsRes);
       setWsForm({
-        work_start: wsRes.data.work_start.slice(0, 5),
-        work_end: wsRes.data.work_end.slice(0, 5),
-        late_threshold_minutes: wsRes.data.late_threshold_minutes,
+        work_start: wsRes.work_start.slice(0, 5),
+        work_end: wsRes.work_end.slice(0, 5),
+        late_threshold_minutes: wsRes.late_threshold_minutes,
       });
     }
   }, [today]);
 
   const loadRekapData = useCallback(async () => {
-    const { data } = await supabase
-      .from('attendance')
-      .select('*, profiles(*)')
-      .eq('date', rekapDate)
-      .order('created_at', { ascending: false });
+    const data = await getAttendancesByDate(rekapDate);
     if (data) setRekapAttendances(data as (Attendance & { profiles: Profile })[]);
   }, [rekapDate]);
 
@@ -70,14 +67,8 @@ export default function AdminDashboard() {
   useEffect(() => { loadRekapData(); }, [loadRekapData]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel('attendance-admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
-        loadData();
-        loadRekapData();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Direct backend API does not use Supabase realtime channels.
+    return undefined;
   }, [loadData, loadRekapData]);
 
   async function startScanner() {
@@ -97,31 +88,17 @@ export default function AdminDashboard() {
               await scanner.stop();
               setScanning(false);
 
-              const { data: userProfile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('user_id', data.user_id)
-                .maybeSingle();
-
-              const fetchedProfile = userProfile ?? await (async () => {
-                const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user_id).maybeSingle();
-                return p;
-              })();
+              const fetchedProfile = await getProfileById(data.user_id);
 
               if (!fetchedProfile) {
                 setScanError('Pengguna tidak ditemukan dalam sistem.');
                 return;
               }
 
-              const { data: existing } = await supabase
-                .from('attendance')
-                .select('*')
-                .eq('user_id', data.user_id)
-                .eq('date', today)
-                .maybeSingle();
+              const existing = await getAttendanceForUser(data.user_id, today);
 
-              if (existing) {
-                setScanError(`${fetchedProfile.full_name} sudah absen hari ini (${STATUS_CONFIG[existing.status as keyof typeof STATUS_CONFIG].label}).`);
+              if (existing.length > 0) {
+                setScanError(`${fetchedProfile.full_name} sudah absen hari ini (${STATUS_CONFIG[existing[0].status as keyof typeof STATUS_CONFIG].label}).`);
                 return;
               }
 
@@ -162,7 +139,7 @@ export default function AdminDashboard() {
       const thresholdMinutes = ws?.late_threshold_minutes ?? 15;
       const status: 'hadir' | 'telat' = arrivalMinutes > workStartMinutes + thresholdMinutes ? 'telat' : 'hadir';
 
-      await supabase.from('attendance').insert({
+      await createAttendance({
         user_id: confirmModal.scannedData.user_id,
         date: today,
         check_in_time: confirmModal.arrivalTime.toISOString(),
@@ -182,13 +159,13 @@ export default function AdminDashboard() {
     if (!editModal) return;
     setSaveLoading(true);
     try {
-      await supabase.from('attendance').update({
+      await updateAttendance(editModal.attendance.id, {
         status: editForm.status,
         note: editForm.note,
-      }).eq('id', editModal.attendance.id);
+      });
       setEditModal(null);
-      loadData();
-      loadRekapData();
+      await loadData();
+      await loadRekapData();
     } finally {
       setSaveLoading(false);
     }
@@ -197,15 +174,7 @@ export default function AdminDashboard() {
   async function saveWorkSettings() {
     setSaveLoading(true);
     try {
-      if (workSettings) {
-        await supabase.from('work_settings').update({
-          ...wsForm,
-          updated_by: profile!.id,
-          updated_at: new Date().toISOString(),
-        }).eq('id', workSettings.id);
-      } else {
-        await supabase.from('work_settings').insert({ ...wsForm, updated_by: profile!.id });
-      }
+      await saveWorkSettingsApi(wsForm);
       await loadData();
     } finally {
       setSaveLoading(false);

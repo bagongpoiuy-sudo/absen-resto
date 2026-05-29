@@ -4,7 +4,7 @@ import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 
 function AppContent() {
-  const { user, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -17,7 +17,7 @@ function AppContent() {
     );
   }
 
-  if (!user || !profile) return <AuthPage />;
+  if (!profile) return <AuthPage />;
   if (profile.role === 'admin') return <AdminDashboard />;
   return <UserDashboard />;
 }

@@ -49,7 +49,8 @@ const apiFetch = async <T>(path: string, init: RequestInit = {}) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api${path}`,  {
+// SESUDAH
+const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://absen-resto-production.up.railway.app'}/api${path}`, {
     ...init,
     headers,
   });

@@ -8,7 +8,14 @@ import { Pool } from 'pg';
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: true }));
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://absen-resto-production.up.railway.app',
+    /\.vercel\.app$/,
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 const pool = new Pool({

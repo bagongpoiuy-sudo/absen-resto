@@ -16,6 +16,8 @@ app.use(cors({
   ],
   credentials: true,
 }));
+app.options('*', cors());
+
 app.use(express.json());
 
 const pool = new Pool({
@@ -30,8 +32,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
 const PORT = Number(process.env.PORT || 4000);
 
 const query = async (text, params) => {
-  const result = await pool.query(text, params);
-  return result;
+  try {
+    const result = await pool.query(text, params);
+    return result;
+  } catch (err) {
+    console.error("Database Query Error:", err.message);
+    throw err; // Lempar error agar ditangkap oleh try-catch di rute API
+  }
 };
 
 const createJwt = (userId) => jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });

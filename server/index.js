@@ -8,13 +8,15 @@ import { Pool } from 'pg';
 dotenv.config();
 
 const app = express();
+// Konfigurasi CORS Dinamis & Fleksibel
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://absen-resto-production.up.railway.app',
-    /\.vercel\.app$/,
-  ],
+  origin: function (origin, callback) {
+    // Mengizinkan semua origin (termasuk localhost, vercel, postman, dll)
+    callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.options('*', cors());
 

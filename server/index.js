@@ -31,6 +31,10 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // Tambahkan header lain jika perlu
 };
 
+// --- 2. PASANG MIDDLEWARE CORS & OPTIONS SEBELUM SEMUA ROUTE ---
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // ⚠️ HARUS DI SINI — SEBELUM express.json() DAN ROUTE
+
 app.use(cors(corsOptions));
 // ------------------------------------
 
